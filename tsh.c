@@ -1,7 +1,8 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your name and login ID here>
+ * Name: Guhao Feng    
+ * ID: 2000013175
  */
 #include <assert.h>
 #include <stdio.h>
@@ -88,9 +89,9 @@ void sigquit_handler(int sig);
 
 void clearjob(struct job_t *job);
 void initjobs(struct job_t *job_list);
-int maxjid(struct job_t *job_list); 
+int maxjid(struct job_t *job_list);
 int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline);
-int deletejob(struct job_t *job_list, pid_t pid); 
+int deletejob(struct job_t *job_list, pid_t pid);
 pid_t fgpid(struct job_t *job_list);
 struct job_t *getjobpid(struct job_t *job_list, pid_t pid);
 struct job_t *getjobjid(struct job_t *job_list, int jid); 
@@ -209,7 +210,12 @@ eval(char *cmdline)
         return;
     if (tok.argv[0] == NULL) /* ignore empty lines */
         return;
-
+    if (!strcmp("quit",tok.argv[0]))
+        _exit(0);
+    if(tok.argv[0][0]=='.'||tok.argv[0][0]=='/'){
+        
+    }
+    
     return;
 }
 
@@ -794,4 +800,3 @@ handler_t
         unix_error("Signal error");
     return (old_action.sa_handler);
 }
-
