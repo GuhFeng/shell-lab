@@ -16,7 +16,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
+#include <setjmp.h>
 /* Misc manifest constants */
 #define MAXLINE 1024   /* max line size */
 #define MAXARGS 128    /* max args on a command line */
@@ -75,6 +75,8 @@ struct cmdline_tokens {
   } builtins;
 };
 
+sigjmp_buf buf;
+sigset_t begin_mask;
 /* End global variables */
 
 /* Function prototypes */
@@ -119,7 +121,10 @@ int main(int argc, char **argv) {
   char c;
   char cmdline[MAXLINE]; /* cmdline for fgets */
   int emit_prompt = 1;   /* emit prompt (default) */
-
+  sigset_t mask_two;
+  sigaddset(&mask_two, SIGINT);
+  sigaddset(&mask_two, SIGTSTP);
+  sigprocmask(SIG_SETMASK, &mask_two, &begin_mask);
   /* Redirect stderr to stdout (so that driver will get all output
    * on the pipe connected to stdout) */
   dup2(1, 2);
@@ -212,7 +217,11 @@ void eval(char *cmdline) {
     return;
   if (tok.argv[0] == NULL) /* ignore empty lines */
     return;
-  if(!build_in_cmd(tok.argv)){
+  int type = sigsetjmp(buf, 1);
+  if (type == 1)
+    _exit(0);
+  if (!build_in_cmd(tok.argv))
+  {
     sigprocmask(SIG_BLOCK, &mask_some, &prev);
     if (bg)
     {
@@ -230,7 +239,7 @@ void eval(char *cmdline) {
       pid = fork();
       if (pid == 0)
       {
-        sigprocmask(SIG_SETMASK, &prev, NULL);
+        sigprocmask(SIG_SETMASK, &begin_mask, NULL);
         execve(tok.argv[0], tok.argv, NULL);
       }
       else{
@@ -438,14 +447,20 @@ void sigchld_handler(int sig) {
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.
  */
-void sigint_handler(int sig) { return; }
+void sigint_handler(int sig) {
+  sio_put("Job [%d] (%d) terminated by signal 2", getpid(), pid2jid(getpid()));
+  siglongjmp(buf, 1);
+}
 
 /*
  * sigtstp_handler - The kernel sends a SIGTSTP to the shell whenever
  *     the user types ctrl-z at the keyboard. Catch it and suspend the
  *     foreground job by sending it a SIGTSTP.
  */
-void sigtstp_handler(int sig) { return; }
+void sigtstp_handler(int sig) {
+  sio_put("Job [%d] (%d) stopped by signal 20", getpid(), pid2jid(getpid()));
+  pause();
+}
 
 /*
  * sigquit_handler - The driver program can gracefully terminate the
