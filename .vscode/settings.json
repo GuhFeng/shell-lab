@@ -17,6 +17,7 @@
   "C_Cpp_Runner.warningsAsError": false,
   "files.associations": {
     "stdio.h": "c",
-    "csapp.h": "c"
+    "csapp.h": "c",
+    "assert.h": "c"
   }
 }
