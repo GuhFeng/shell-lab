@@ -1,7 +1,7 @@
 /*
  * tsh - A tiny shell program with job control
  *
- * Name: Guhao Feng
+ * Name: 冯古豪
  * ID: 2000013175
  */
 #include <assert.h>
@@ -75,8 +75,7 @@ struct cmdline_tokens {
   } builtins;
 };
 
-sigjmp_buf buf;
-sigset_t begin_mask;
+/* IO redirection */
 int infd = -1, outfd = -1, stdIN, stdOUT;
 /* End global variables */
 
@@ -117,34 +116,42 @@ typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
 /*##############################################################*/
+/* here is wrapper function */
+
 void Sigemptyset(sigset_t *set) {
-  if (sigemptyset(set) < 0) unix_error("Sigemptyset error");
+  if (sigemptyset(set) < 0)
+    unix_error("Sigemptyset error");
   return;
 }
 
 void Sigfillset(sigset_t *set) {
-  if (sigfillset(set) < 0) unix_error("Sigfillset error");
+  if (sigfillset(set) < 0)
+    unix_error("Sigfillset error");
   return;
 }
 
 void Sigaddset(sigset_t *set, int signum) {
-  if (sigaddset(set, signum) < 0) unix_error("Sigaddset error");
+  if (sigaddset(set, signum) < 0)
+    unix_error("Sigaddset error");
   return;
 }
 
 void Sigdelset(sigset_t *set, int signum) {
-  if (sigdelset(set, signum) < 0) unix_error("Sigdelset error");
+  if (sigdelset(set, signum) < 0)
+    unix_error("Sigdelset error");
   return;
 }
 void Sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-  if (sigprocmask(how, set, oldset) < 0) unix_error("Sigprocmask error");
+  if (sigprocmask(how, set, oldset) < 0)
+    unix_error("Sigprocmask error");
   return;
 }
 /* $begin forkwrapper */
 pid_t Fork(void) {
   pid_t pid;
 
-  if ((pid = fork()) < 0) unix_error("Fork error");
+  if ((pid = fork()) < 0)
+    unix_error("Fork error");
   return pid;
 }
 /* $end forkwrapper */
@@ -152,19 +159,22 @@ pid_t Fork(void) {
 int Dup2(int fd1, int fd2) {
   int rc;
 
-  if ((rc = dup2(fd1, fd2)) < 0) unix_error("Dup2 error");
+  if ((rc = dup2(fd1, fd2)) < 0)
+    unix_error("Dup2 error");
   return rc;
 }
 
 void Execve(const char *filename, char *const argv[], char *const envp[]) {
-  if (execve(filename, argv, envp) < 0) unix_error("Execve error");
+  if (execve(filename, argv, envp) < 0)
+    unix_error("Execve error");
 }
 
 /* $begin wait */
 pid_t Wait(int *status) {
   pid_t pid;
 
-  if ((pid = wait(status)) < 0) unix_error("Wait error");
+  if ((pid = wait(status)) < 0)
+    unix_error("Wait error");
   return pid;
 }
 /* $end wait */
@@ -172,7 +182,8 @@ pid_t Wait(int *status) {
 pid_t Waitpid(pid_t pid, int *iptr, int options) {
   pid_t retpid;
 
-  if ((retpid = waitpid(pid, iptr, options)) < 0) unix_error("Waitpid error");
+  if ((retpid = waitpid(pid, iptr, options)) < 0)
+    unix_error("Waitpid error");
   return (retpid);
 }
 
@@ -180,7 +191,8 @@ pid_t Waitpid(pid_t pid, int *iptr, int options) {
 void Kill(pid_t pid, int signum) {
   int rc;
 
-  if ((rc = kill(pid, signum)) < 0) unix_error("Kill error");
+  if ((rc = kill(pid, signum)) < 0)
+    unix_error("Kill error");
 }
 /* $end kill */
 
@@ -196,11 +208,14 @@ unsigned int Alarm(unsigned int seconds) { return alarm(seconds); }
 void Setpgid(pid_t pid, pid_t pgid) {
   int rc;
 
-  if ((rc = setpgid(pid, pgid)) < 0) unix_error("Setpgid error");
+  if ((rc = setpgid(pid, pgid)) < 0)
+    unix_error("Setpgid error");
   return;
 }
 
 pid_t Getpgrp(void) { return getpgrp(); }
+
+/*End of wrapper function*/
 /*##############################################################*/
 /*
  * main - The shell's main routine
@@ -216,17 +231,17 @@ int main(int argc, char **argv) {
   /* Parse the command line */
   while ((c = getopt(argc, argv, "hvp")) != EOF) {
     switch (c) {
-      case 'h': /* print help message */
-        usage();
-        break;
-      case 'v': /* emit additional diagnostic info */
-        verbose = 1;
-        break;
-      case 'p':          /* don't print a prompt */
-        emit_prompt = 0; /* handy for automatic testing */
-        break;
-      default:
-        usage();
+    case 'h': /* print help message */
+      usage();
+      break;
+    case 'v': /* emit additional diagnostic info */
+      verbose = 1;
+      break;
+    case 'p':          /* don't print a prompt */
+      emit_prompt = 0; /* handy for automatic testing */
+      break;
+    default:
+      usage();
     }
   }
 
@@ -290,10 +305,17 @@ void eval(char *cmdline) {
   int bg; /* should the job run in bg or fg? */
   struct cmdline_tokens tok;
   sigset_t mask_all, mask_three, prev;
-  sigfillset(&mask_all);
-  sigaddset(&mask_three, SIGCHLD);
-  sigaddset(&mask_three, SIGTERM);
-  sigaddset(&mask_three, SIGTSTP);
+  Sigfillset(&mask_all);
+  Sigemptyset(&mask_three);
+  Sigaddset(&mask_three, SIGCHLD);
+  Sigaddset(&mask_three, SIGINT);
+  Sigaddset(&mask_three, SIGTSTP);
+  /*
+   * here are masks of signal
+   * mask_three masks SIGCHLD, SIGTERM, SIGTSTP
+   * mask_all masks all signal
+   * prev records the previous mask
+   */
   pid_t pid;
   /* Parse command line */
   bg = parseline(cmdline, &tok);
@@ -302,42 +324,47 @@ void eval(char *cmdline) {
     return;
   if (tok.argv[0] == NULL) /* ignore empty lines */
     return;
-  Sigfillset(&mask_all);
-  Sigemptyset(&mask_three);
-  Sigaddset(&mask_three, SIGCHLD);
-  Sigaddset(&mask_three, SIGINT);
-  Sigaddset(&mask_three, SIGTSTP);
-  IO_redirection(&tok);
+  IO_redirection(&tok); /* IO redirection */
   if (!build_in_cmd(&tok)) {
+    /* mask three signals(SIGCHLD, SIGINT, SIGTSTP)
+     * and save previous mask to prev
+     */
     Sigprocmask(SIG_BLOCK, &mask_three, &prev);
     if (!bg) {
       if ((pid = Fork()) == 0) {
+        /* recover prevoius mask for child process */
         Sigprocmask(SIG_SETMASK, &prev, NULL);
         Setpgid(0, 0);
         Execve(tok.argv[0], tok.argv, environ);
       } else {
         Sigprocmask(SIG_BLOCK, &mask_all, NULL);
+        /* when modify global variable, mask all signals */
         addjob(job_list, pid, bg + 1, cmdline);
         Pid = 0;
-        while (Pid == 0) sigsuspend(&prev);
+        while (Pid == 0)
+          sigsuspend(&prev);
       }
     } else {
       if ((pid = Fork()) == 0) {
+        /* recover prevoius mask for child process */
         Sigprocmask(SIG_SETMASK, &prev, NULL);
         Setpgid(0, 0);
         Execve(tok.argv[0], tok.argv, environ);
       } else {
         Sigprocmask(SIG_BLOCK, &mask_all, NULL);
+        /* when modify global variable, mask all signals */
         addjob(job_list, pid, bg + 1, cmdline);
         printf("[%d] (%d) %s\n", pid2jid(pid), pid, cmdline);
       }
     }
   }
+  /* recover prevoius mask */
   Sigprocmask(SIG_SETMASK, &prev, NULL);
-  IO_restore(&tok);
+  IO_restore(&tok); /*recover the redirected stdio*/
   return;
 }
 
+/* redirection stdio to the output file and input file */
 void IO_redirection(struct cmdline_tokens *tok) {
   stdIN = dup(STDIN_FILENO);
   stdOUT = dup(STDOUT_FILENO);
@@ -351,20 +378,34 @@ void IO_redirection(struct cmdline_tokens *tok) {
   }
 }
 
+/* recover stdio */
 void IO_restore(struct cmdline_tokens *tok) {
-  if (infd != -1) close(infd);
-  if (outfd != -1) close(outfd);
+  if (infd != -1)
+    close(infd);
+  if (outfd != -1)
+    close(outfd);
   dup2(stdIN, STDIN_FILENO);
   dup2(stdOUT, STDOUT_FILENO);
   return;
 }
 
+/* check whether the input commond is built in commond
+ * if isn't, return 0
+ * if it is, give a solution to these commond
+ */
 int build_in_cmd(struct cmdline_tokens *tok) {
-  if (tok->builtins == BUILTIN_QUIT) _exit(0);
+  /* if quit, exit */
+  if (tok->builtins == BUILTIN_QUIT)
+    _exit(0);
+  /* if jobs, call listjobs */
   if (tok->builtins == BUILTIN_JOBS) {
     listjobs(job_list, STDOUT_FILENO);
     return 1;
   }
+  /* if bg, print some information,
+   * send a signal to the job
+   * and execute it in background
+   */
   if (tok->builtins == BUILTIN_BG) {
     if (tok->argv[1][0] == '%') {
       int job_num = atoi(tok->argv[1] + 1) - 1;
@@ -384,6 +425,7 @@ int build_in_cmd(struct cmdline_tokens *tok) {
       return 1;
     }
   }
+  /* if fg, send a signal to the job, and execute in frontground */
   if (tok->builtins == BUILTIN_FG) {
     if (tok->argv[1][0] == '%') {
       int job_num = atoi(tok->argv[1] + 1) - 1;
@@ -392,7 +434,8 @@ int build_in_cmd(struct cmdline_tokens *tok) {
       Pid = 0;
       sigset_t prev;
       sigemptyset(&prev);
-      while (Pid == 0) sigsuspend(&prev);
+      while (Pid == 0)
+        sigsuspend(&prev);
       return 1;
     } else {
       pid_t pid = atoi(tok->argv[1]);
@@ -401,10 +444,12 @@ int build_in_cmd(struct cmdline_tokens *tok) {
       Pid = 0;
       sigset_t prev;
       sigemptyset(&prev);
-      while (Pid == 0) sigsuspend(&prev);
+      while (Pid == 0)
+        sigsuspend(&prev);
       return 1;
     }
   }
+  /* if nohup, mask SIGHUP and execute the program */
   if (tok->builtins == BUILTIN_NOHUP) {
     pid_t pid;
     sigset_t mask_one, mask_all, prev;
@@ -424,6 +469,7 @@ int build_in_cmd(struct cmdline_tokens *tok) {
     }
     return 1;
   }
+  /* if kill, terminate the job */
   if (tok->builtins == BUILTIN_KILL) {
     if (tok->argv[1][0] == '%') {
       int job_num = atoi(tok->argv[1] + 1) - 1;
@@ -501,7 +547,8 @@ int parseline(const char *cmdline, struct cmdline_tokens *tok) {
   while (buf < endbuf) {
     /* Skip the white-spaces */
     buf += strspn(buf, delims);
-    if (buf >= endbuf) break;
+    if (buf >= endbuf)
+      break;
 
     /* Check for I/O redirection specifiers */
     if (*buf == '<') {
@@ -544,23 +591,24 @@ int parseline(const char *cmdline, struct cmdline_tokens *tok) {
 
     /* Record the token as either the next argument or the i/o file */
     switch (parsing_state) {
-      case ST_NORMAL:
-        tok->argv[tok->argc++] = buf;
-        break;
-      case ST_INFILE:
-        tok->infile = buf;
-        break;
-      case ST_OUTFILE:
-        tok->outfile = buf;
-        break;
-      default:
-        (void)fprintf(stderr, "Error: Ambiguous I/O redirection\n");
-        return -1;
+    case ST_NORMAL:
+      tok->argv[tok->argc++] = buf;
+      break;
+    case ST_INFILE:
+      tok->infile = buf;
+      break;
+    case ST_OUTFILE:
+      tok->outfile = buf;
+      break;
+    default:
+      (void)fprintf(stderr, "Error: Ambiguous I/O redirection\n");
+      return -1;
     }
     parsing_state = ST_NORMAL;
 
     /* Check if argv is full */
-    if (tok->argc >= MAXARGS - 1) break;
+    if (tok->argc >= MAXARGS - 1)
+      break;
 
     buf = next + 1;
   }
@@ -611,15 +659,18 @@ int parseline(const char *cmdline, struct cmdline_tokens *tok) {
  *     for any other currently running children to terminate.
  */
 void sigchld_handler(int sig) {
+  /* save errno */
   int olderrno = errno;
   sigset_t mask_all, prev;
   pid_t pid;
   Sigfillset(&mask_all);
   int status;
-  while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
-    if (fgpid(job_list) == pid) Pid = 1;
+  while ((pid = waitpid(-1, &status, 3)) > 0) {
+    if (fgpid(job_list) == pid)
+      Pid = 1;
     Sigprocmask(SIG_BLOCK, &mask_all, &prev);
     if (WIFEXITED(status)) {
+      /* when modify global variable, mask all signals */
       deletejob(job_list, pid);
     } else if (WIFSTOPPED(status)) {
       printf("Job [%d] (%d) stopped by signal %d \n", pid2jid(pid), pid,
@@ -632,6 +683,7 @@ void sigchld_handler(int sig) {
     }
     Sigprocmask(SIG_SETMASK, &prev, NULL);
   }
+  /* recover errno */
   errno = olderrno;
 }
 
@@ -686,7 +738,8 @@ void clearjob(struct job_t *job) {
 void initjobs(struct job_t *job_list) {
   int i;
 
-  for (i = 0; i < MAXJOBS; i++) clearjob(&job_list[i]);
+  for (i = 0; i < MAXJOBS; i++)
+    clearjob(&job_list[i]);
 }
 
 /* maxjid - Returns largest allocated job ID */
@@ -694,21 +747,24 @@ int maxjid(struct job_t *job_list) {
   int i, max = 0;
 
   for (i = 0; i < MAXJOBS; i++)
-    if (job_list[i].jid > max) max = job_list[i].jid;
+    if (job_list[i].jid > max)
+      max = job_list[i].jid;
   return max;
 }
 
 /* addjob - Add a job to the job list */
 int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline) {
   int i;
-  if (pid < 1) return 0;
+  if (pid < 1)
+    return 0;
 
   for (i = 0; i < MAXJOBS; i++) {
     if (job_list[i].pid == 0) {
       job_list[i].pid = pid;
       job_list[i].state = state;
       job_list[i].jid = nextjid++;
-      if (nextjid > MAXJOBS) nextjid = 1;
+      if (nextjid > MAXJOBS)
+        nextjid = 1;
       strcpy(job_list[i].cmdline, cmdline);
       if (verbose) {
         sio_put("Added job [%d] %d %s\n", job_list[i].jid, job_list[i].pid,
@@ -725,7 +781,8 @@ int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline) {
 int deletejob(struct job_t *job_list, pid_t pid) {
   int i;
 
-  if (pid < 1) return 0;
+  if (pid < 1)
+    return 0;
 
   for (i = 0; i < MAXJOBS; i++) {
     if (job_list[i].pid == pid) {
@@ -742,7 +799,8 @@ pid_t fgpid(struct job_t *job_list) {
   int i;
 
   for (i = 0; i < MAXJOBS; i++)
-    if (job_list[i].state == FG) return job_list[i].pid;
+    if (job_list[i].state == FG)
+      return job_list[i].pid;
   return 0;
 }
 
@@ -750,9 +808,11 @@ pid_t fgpid(struct job_t *job_list) {
 struct job_t *getjobpid(struct job_t *job_list, pid_t pid) {
   int i;
 
-  if (pid < 1) return NULL;
+  if (pid < 1)
+    return NULL;
   for (i = 0; i < MAXJOBS; i++)
-    if (job_list[i].pid == pid) return &job_list[i];
+    if (job_list[i].pid == pid)
+      return &job_list[i];
   return NULL;
 }
 
@@ -760,9 +820,11 @@ struct job_t *getjobpid(struct job_t *job_list, pid_t pid) {
 struct job_t *getjobjid(struct job_t *job_list, int jid) {
   int i;
 
-  if (jid < 1) return NULL;
+  if (jid < 1)
+    return NULL;
   for (i = 0; i < MAXJOBS; i++)
-    if (job_list[i].jid == jid) return &job_list[i];
+    if (job_list[i].jid == jid)
+      return &job_list[i];
   return NULL;
 }
 
@@ -770,7 +832,8 @@ struct job_t *getjobjid(struct job_t *job_list, int jid) {
 int pid2jid(pid_t pid) {
   int i;
 
-  if (pid < 1) return 0;
+  if (pid < 1)
+    return 0;
   for (i = 0; i < MAXJOBS; i++)
     if (job_list[i].pid == pid) {
       return job_list[i].jid;
@@ -793,18 +856,18 @@ void listjobs(struct job_t *job_list, int output_fd) {
       }
       memset(buf, '\0', MAXLINE);
       switch (job_list[i].state) {
-        case BG:
-          sprintf(buf, "Running    ");
-          break;
-        case FG:
-          sprintf(buf, "Foreground ");
-          break;
-        case ST:
-          sprintf(buf, "Stopped    ");
-          break;
-        default:
-          sprintf(buf, "listjobs: Internal error: job[%d].state=%d ", i,
-                  job_list[i].state);
+      case BG:
+        sprintf(buf, "Running    ");
+        break;
+      case FG:
+        sprintf(buf, "Foreground ");
+        break;
+      case ST:
+        sprintf(buf, "Stopped    ");
+        break;
+      default:
+        sprintf(buf, "listjobs: Internal error: job[%d].state=%d ", i,
+                job_list[i].state);
       }
       if (write(output_fd, buf, strlen(buf)) < 0) {
         fprintf(stderr, "Error writing to output file\n");
@@ -881,15 +944,18 @@ static void sio_ltoa(long v, char s[], int b) {
 static size_t sio_strlen(const char s[]) {
   int i = 0;
 
-  while (s[i] != '\0') ++i;
+  while (s[i] != '\0')
+    ++i;
   return i;
 }
 
 /* sio_copy - Copy len chars from fmt to s (by Ding Rui) */
 void sio_copy(char *s, const char *fmt, size_t len) {
-  if (!len) return;
+  if (!len)
+    return;
 
-  for (size_t i = 0; i < len; i++) s[i] = fmt[i];
+  for (size_t i = 0; i < len; i++)
+    s[i] = fmt[i];
 }
 
 /* Public Sio functions */
@@ -907,17 +973,18 @@ ssize_t sio_putl(long v) /* Put long */
 }
 
 ssize_t sio_put(const char *fmt,
-                ...)  // Put to the console. only understands %d
+                ...) // Put to the console. only understands %d
 {
   va_list ap;
-  char str[MAXLINE];  // formatted string
+  char str[MAXLINE]; // formatted string
   char arg[128];
   const char *mess = "sio_put: Line too long!\n";
   int i = 0, j = 0;
   int sp = 0;
   int v;
 
-  if (fmt == 0) return -1;
+  if (fmt == 0)
+    return -1;
 
   va_start(ap, fmt);
   while (fmt[j]) {
@@ -930,40 +997,40 @@ ssize_t sio_put(const char *fmt,
     sp += j - i;
 
     switch (fmt[j + 1]) {
-      case 0:
-        va_end(ap);
-        if (sp >= MAXLINE) {
-          write(STDOUT_FILENO, mess, sio_strlen(mess));
-          return -1;
-        }
+    case 0:
+      va_end(ap);
+      if (sp >= MAXLINE) {
+        write(STDOUT_FILENO, mess, sio_strlen(mess));
+        return -1;
+      }
 
-        str[sp] = 0;
-        return write(STDOUT_FILENO, str, sp);
+      str[sp] = 0;
+      return write(STDOUT_FILENO, str, sp);
 
-      case 'd':
-        v = va_arg(ap, int);
-        sio_ltoa(v, arg, 10);
-        sio_copy(str + sp, arg, sio_strlen(arg));
-        sp += sio_strlen(arg);
-        i = j + 2;
-        j = i;
-        break;
+    case 'd':
+      v = va_arg(ap, int);
+      sio_ltoa(v, arg, 10);
+      sio_copy(str + sp, arg, sio_strlen(arg));
+      sp += sio_strlen(arg);
+      i = j + 2;
+      j = i;
+      break;
 
-      case '%':
-        sio_copy(str + sp, "%", 1);
-        sp += 1;
-        i = j + 2;
-        j = i;
-        break;
+    case '%':
+      sio_copy(str + sp, "%", 1);
+      sp += 1;
+      i = j + 2;
+      j = i;
+      break;
 
-      default:
-        sio_copy(str + sp, fmt + j, 2);
-        sp += 2;
-        i = j + 2;
-        j = i;
-        break;
+    default:
+      sio_copy(str + sp, fmt + j, 2);
+      sp += 2;
+      i = j + 2;
+      j = i;
+      break;
     }
-  }  // end while
+  } // end while
 
   sio_copy(str + sp, fmt + i, j - i);
   sp += j - i;
@@ -994,6 +1061,7 @@ handler_t *Signal(int signum, handler_t *handler) {
   sigemptyset(&action.sa_mask); /* block sigs of type being handled */
   action.sa_flags = SA_RESTART; /* restart syscalls if possible */
 
-  if (sigaction(signum, &action, &old_action) < 0) unix_error("Signal error");
+  if (sigaction(signum, &action, &old_action) < 0)
+    unix_error("Signal error");
   return (old_action.sa_handler);
 }
